@@ -138,10 +138,12 @@ points(time, data1$Observation, pch="+",cex=0.5) # plot gcc_90 original points
 # Define a function to forecast future values
 forecast_future <- function(model, beta, temperature_future, time_future) {
   # Generate design matrix for future data
-  X_future <- cbind(1, temperature_future)
+  X_future <- cbind(1, filtered_temperature_future)
+
+  beta_means = colMeans(beta)
 
   X_future_matrix <- as.matrix(X_future[, c(1, 3)])
-  beta_matrix <- t(as.matrix(params[[1]][, c(1, 2)]))
+  beta_matrix <- as.matrix(beta_means[1:2])
 
   # Perform matrix multiplication
   predicted <- X_future_matrix %*% beta_matrix
@@ -151,14 +153,14 @@ forecast_future <- function(model, beta, temperature_future, time_future) {
 }
 
 #split TMP_future by ensemble and produce forecast per ensemble
-for (i in 1:30) 
+for (i in 1:31) 
   {
     # utilize temperture forecase data from step 1
     filtered_temperature_future <- subset(TMP_future, ensemble == i)
     
     # Example: Forecast future values for the next 30 days
-    future_days <- 36#nrow(filtered_temperature_future)
-    print(length(future_days))
+    print(nrow(filtered_temperature_future))
+    future_days <- nrow(filtered_temperature_future)
     last_date <- tail(as.Date(data1$Date), 1)
     time_future <- seq(last_date + 1, length.out = future_days, by = "day")
                 
@@ -166,7 +168,7 @@ for (i in 1:30)
     forecast <- forecast_future(model = gcc.out, beta = params[[2]], temperature_future = filtered_temperature_future, time_future = time_future)
                 
     #Plot the forecasted values along with the observed data
-    plot(forecast$Time, forecast$Forecast.2, col = "red", lty = 2, type = 'b', xlab = "Date", ylab = "Temperature (C°)")
+    plot(forecast$Time, forecast$Forecast, col = "red", lty = 2, type = 'b', xlab = "Date", ylab = "Temperature (C°)")
     
   }
 
