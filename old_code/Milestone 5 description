@@ -1,0 +1,8 @@
+We are starting with a random walk model to examine the temporal behavior of GCC at Harvard Forest. 
+In our data model, we observe the Green Chomatic Coordinate(GCC) data and how it relates to the to the latent variable representing the true underlying GCC. 
+In our process model, we describe the evolution of the latent variable representing GCC over time. We use a random walk process, and we assumed that the latent variable at each time point follows a normal distribution with mean equal to the GCC at the previous time point and precision (tau_add) as a parameter.
+
+We chose the priors from iteratively testing the model, our priors are the initial condition, observation error and the process error. 
+
+Overall, this Bayesian model integrates observed GCC data with prior beliefs about the initial condition, observation error, and process error to infer the behavior of GCC over time, employing a random walk process.
+

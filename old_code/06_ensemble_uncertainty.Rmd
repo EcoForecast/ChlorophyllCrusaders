@@ -1,0 +1,261 @@
+---
+title: 'Ensemble Forecasts and Uncertainty Partitioning'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ecoforecastR)
+library(dplyr)
+library(lubridate)
+library(tidyr)
+```
+
+## Load in model run from milestone 5
+
+```{r}
+load(file = "DLM.Rdata")
+```
+
+### If you don't have the DLM saved, set eval=TRUE to run the chunk to get the DLM
+
+```{r, eval=FALSE}
+URL = "https://data.ecoforecast.org/neon4cast-targets/phenology/phenology-targets.csv.gz"
+
+# Get gcc data
+data = readr::read_csv(URL, col_names = c("Date", "Siteid", "Variable", "Observation"))
+harv = na.omit(data[data$Siteid == "HARV",]) # filter by Harvard Forest site
+gcc_90 = harv[harv$Variable == "gcc_90",]
+
+# Get historic temperature data
+weather_stage3 <- neon4cast::noaa_stage3()
+ds1 <- weather_stage3 |> 
+  dplyr::filter(site_id == "HARV") |>
+  dplyr::collect()
+TMP = ds1[ds1$variable == "air_temperature",]
+tmps <- as.data.frame(TMP) # save temperature data as dataframe
+tmps$date <- date(tmps$datetime)
+tmps$date <- as.character(tmps$date)
+# Get maximum temperature within each ensemble per day: 31 ensembles x 36 days
+temp_max <- tmps %>% 
+  group_by(date) %>%
+  summarize(temp.max = max(prediction)) 
+data1 <- gcc_90[which(gcc_90$Date == temp_max$date[1]):nrow(gcc_90), ]
+temp <- temp_max[temp_max$date %in% data1$Date, ]
+# Add temperature as column in data dataframe
+data1$Temperature <- temp$temp.max - 273.15
+mean_temp <- tmps %>%
+  group_by(date) %>%
+  summarize(temp.mean = mean(prediction) - 273.15)
+mean_temp <- mean_temp[mean_temp$date %in% data1$Date,]
+data1$TempDiff <- mean_temp$temp.mean - data1$Temperature
+
+#data_36 <- tail(data1, n=36) # get the last 36 days for prediction?
+
+# Run the DLM
+gcc.out <- ecoforecastR::fit_dlm(model=list(obs="Observation", fixed="~ 1 + X + TempDiff"), data1)
+
+# comment out to save DLM as Rdata, so you don't have to run this again
+#save(gcc.out, file="DLM.Rdata")
+```
+
+## Step 1: Grabbing the Forecast Temperature Data
+```{r}
+weather_stage3 <- neon4cast::noaa_stage2(start_date = as.character(Sys.Date() - lubridate::days(2)))
+ds1 <- weather_stage3 |> 
+  dplyr::filter(site_id == "HARV") |>
+  dplyr::collect()
+
+TMP = ds1[ds1$variable == "air_temperature",]
+
+TMP <- TMP %>% 
+  mutate(datetime = lubridate::as_date(datetime)) %>% 
+  group_by(datetime, site_id, parameter, variable) |> 
+  summarize(prediction = mean(prediction),.groups = "drop") |> 
+  select(datetime, site_id, variable, prediction, parameter)
+
+# clean up temp data
+tmps <- as.data.frame(TMP) # save temperature data as dataframe
+
+# Get maximum temperature within each ensemble per day: 31 ensembles x 36 days
+temp_max <- tmps %>% 
+  group_by(datetime, parameter) %>%
+  summarize(temp.max = max(prediction)) 
+
+# columns: ensemble, rows: forecast by time step
+temps <- pivot_wider(temp_max, names_from = parameter, values_from = temp.max) 
+```
+
+
+## Step 2: Define a forecast function that takes in the calculated DLM parameters, and uses the forecast temperature
+
+```{r}
+##` @param IC    Initial Conditions
+##` @param temp  Temperature forecast
+##` @param beta  Slope of temperature effect on gcc
+##` @param alpha Site random effect
+##` @param Q     Process error (default = 0 for deterministic runs)
+##` @param n     Size of Monte Carlo ensemble
+forecast <- function(IC, temp, beta, Q=0, n, gmin, gmax){ # temp should be a vector
+  N <- matrix(NA, NT, n)  ## rows: forecasts by time, columns: ensemble number
+  Nprev <- IC           ## initialize
+  for(t in 1:NT){ # update daily per ensemble...
+    mean_temp <- mean(as.numeric(temp[,-1][t,])) - 273.15
+    temp_diff <- mean_temp - (temp[,-1][t,] - 273.15)
+    gcc_predict = Nprev + beta * temp_diff # linear model
+    N[t,] <- pmax(pmin(rnorm(n, mean(as.numeric(gcc_predict)), Q), gmax), gmin) # Ensure prediction is within bounds and predict next step
+    #N[,t] <- rnorm(n, gcc_predict, Q)
+    Nprev <- N[t,] # update IC
+  }
+  return(N)
+}
+```
+
+## Step 3: Run the forecast on the temperature ensembles and plot the results
+
+```{r}
+Nmc = 31 # number of Monte Carlo ensembles
+NT = 36 # number of time steps into the future
+
+# extract necessary things from DLM
+params <- window(gcc.out$params, start=1000)
+out <- as.matrix(gcc.out$predict) # get model predictions
+ci <- apply(out, 2, quantile, c(0.025,0.5,0.975)) # get model confidence intervals
+data <- gcc.out$data
+
+test <- as.data.frame(params[[1]])
+param.mean <- apply(params[[1]], 2, mean)
+betaTemp <- param.mean["betaTempDiff"]  # get the mean beta for temperature
+q <- 1 / sqrt(param.mean["tau_add"])
+
+prow <- sample.int(nrow(params[[1]]), Nmc, replace=TRUE)
+Qmc <- 1 / sqrt(params[[1]][prow, "tau_add"])
+drow <- sample.int(ncol(temp_max), Nmc, replace=TRUE)
+
+IC <- rnorm(Nmc, tail(as.numeric(data$OBS,1)), tail(Qmc, 1))
+
+pheno_forecast <- forecast(IC = IC,#as.numeric(tail(gcc.out$predict[[1]], n=1)), IC = mean(as.numeric(data$OBS))
+                           temp = temps,
+                           beta = betaTemp,
+                           Q = Qmc,
+                           n = 36,
+                           gmin = min(as.numeric(data$OBS), na.rm=T),
+                           gmax = max(as.numeric(data$OBS), na.rm=T))
+# Plot the ensemble runs
+for(ensemble in 1:31) {
+  plot(pheno_forecast[,ensemble],
+       type='b',
+       xlab="time",
+       ylab="prediction gcc",
+       main = c(ensemble, "ensemble number"))
+}
+```
+
+# Uncertainty Analysis
+
+## Set up the plot function
+```{r}
+s <- 1             ## Focal site for forward simulation
+#Nmc = 1000         ## set number of Monte Carlo draws
+ylim = c(0.3,0.4)  ## set Y range on plot
+N.cols <- c("black","red","green","blue","orange") ## set colors
+trans <- 0.8       ## set transparancy
+time = 1:(NT*2)    ## total time
+time1 = 1:NT       ## calibration period
+time2 = time1+NT   ## forecast period
+
+plot.run <- function(){
+  #sel = seq(s, ncol(ci), by=1)
+  plot(time,time,type='n',ylim = ylim, ylab="gcc")
+  ecoforecastR::ciEnvelope(time1, tail(ci[1,], n=36), tail(ci[3,], n=36), col=col.alpha("lightBlue",0.6))
+  #points(time1, tail(as.numeric(gcc.out$predict[[1]]), n = 36))
+  points(time1, tail(as.numeric(gcc.out$predict[[1]]), n = 36))
+  lines(time1, tail(ci[2,], n=36), col="blue")
+}
+```
+
+### Prediction from DLM (first ensemble)
+```{r,echo=FALSE}
+ci <- apply(tail(gcc.out$predict[[1]], n=36), 2, quantile, c(0.025,0.5,0.975))
+plot.run()
+lines(time2, pheno_forecast[,1],col="purple",lwd=3)
+```
+
+### Initial condition uncertainty
+```{r}
+#prow = sample.int(nrow(params),Nmc,replace=TRUE)
+#IC = as.matrix(gcc.out$predict)
+#IC <- rnorm(Nmc, tail(as.numeric(data$OBS,1)), tail(Qmc, 1))
+
+N.I <- forecast(IC=IC, # , IC = mean(as.numeric(data$OBS))
+                temp = temps,
+                beta = betaTemp,
+                Q = Qmc,
+                n = 36,
+                gmin = min(as.numeric(data$OBS), na.rm=T),
+                gmax = max(as.numeric(data$OBS), na.rm=T))
+
+## Plot run
+plot.run()
+N.I.ci = apply(N.I,2,quantile,c(0.025,0.5,0.975))
+ecoforecastR::ciEnvelope(time2, N.I.ci[1,], N.I.ci[3,], col="lightgreen")#col=col.alpha(N.cols[1],trans))
+lines(time2,pheno_forecast[1,],lwd=0.5)
+```
+
+### Paramter uncertainty (betaTempDiff)
+```{r}
+N.IP <- forecast(IC=pheno_forecast[1,], # , IC = mean(as.numeric(data$OBS))
+                temp = temps,
+                beta = params[[1]][prow, "betaTempDiff"],
+                Q = Qmc,
+                n = 36,
+                gmin = min(as.numeric(data$OBS), na.rm=T),
+                gmax = max(as.numeric(data$OBS), na.rm=T))
+
+plot.run()
+N.IP.ci = apply(N.IP,2,quantile,c(0.025,0.5,0.975))
+ecoforecastR::ciEnvelope(time2,N.IP.ci[1,],N.IP.ci[3,],col="pink")#col.alpha(N.cols[2],trans))
+ecoforecastR::ciEnvelope(time2, N.I.ci[1,], N.I.ci[3,], col="lightgreen")#col=col.alpha(N.cols[1],trans))
+lines(time2,pheno_forecast[1,],lwd=0.5)
+
+```
+# Driver uncertainty
+
+```{r}
+drow = sample.int(nrow(pheno_forecast),Nmc,replace=TRUE)
+N.IPD <- forecast(IC=pheno_forecast[1,], # , IC = mean(as.numeric(data$OBS))
+                temp = temps[drow,],
+                beta = params[[1]][prow, "betaTempDiff"],
+                Q = Qmc,
+                n = 36,
+                gmin = min(as.numeric(data$OBS), na.rm=T),
+                gmax = max(as.numeric(data$OBS), na.rm=T))
+
+plot.run()
+N.IPD.ci = apply(N.IPD,2,quantile,c(0.025,0.5,0.975), na.rm=TRUE)
+ecoforecastR::ciEnvelope(time2,N.IPD.ci[1,],N.IPD.ci[3,],col=col.alpha(N.cols[3],trans))
+ecoforecastR::ciEnvelope(time2,N.IP.ci[1,],N.IP.ci[3,],col=col.alpha(N.cols[2],trans))
+ecoforecastR::ciEnvelope(time2, N.I.ci[1,], N.I.ci[3,], col=col.alpha(N.cols[1],trans))
+lines(time2,pheno_forecast[1,],lwd=0.5,col="purple")
+```
+
+### Process uncertainty : Do not run (its wrong rn)
+```{r}
+#Qmc <- 1/sqrt(params[prow,"Q"])  ## convert from precision to standard deviation
+
+N.IPDE <- forecast(IC=pheno_forecast[1,], # , IC = mean(as.numeric(data$OBS))
+                temp = temps[drow,],
+                beta = params[[1]][prow, "betaTempDiff"],
+                Q = Qmc,
+                n = 36,
+                gmin = min(as.numeric(data$OBS), na.rm=T),
+                gmax = max(as.numeric(data$OBS), na.rm=T))
+
+## Plot run
+plot.run()
+N.IPDE.ci = apply(N.IPDE,2,quantile,c(0.025,0.5,0.975), na.rm=TRUE)
+ecoforecastR::ciEnvelope(time2,N.IPD.ci[1,],N.IPD.ci[3,],col=col.alpha(N.cols[3],trans))
+ecoforecastR::ciEnvelope(time2,N.IP.ci[1,],N.IP.ci[3,],col=col.alpha(N.cols[2],trans))
+ecoforecastR::ciEnvelope(time2, N.I.ci[1,], N.I.ci[3,], col=col.alpha(N.cols[1],trans))
+ecoforecastR::ciEnvelope(time2,N.I.ci[1,],N.I.ci[3,],col=col.alpha(N.cols[1],trans))
+lines(time2,N.I.ci[2,],lwd=0.5)
+```
