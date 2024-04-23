@@ -1,7 +1,4 @@
-library(dplyr)
-library(lubridate)
-library(tidyr)
-#source("05_historic_forecast.R")
+source("05_historic_forecast.R")
 
 # Function for grabbing future forecast data based on the current date
 
@@ -62,4 +59,32 @@ forecast <- function(IC, temp, betaTemp, betaX, betaI, Q, n){
   return(N)
 }
 
+# Making one deterministic run -- for submission?
+
+# Get future forecast temperature data
+temps_ensemble <- download_future_met()
+temps_rot <- t(temps_ensemble)[,1:30]
+temps <- matrix(apply(temps_rot,2,mean), 1, 30) # it seems more accurate with max though
+
+Nmc = 1000 # number of Monte Carlo draws
+NT = 30 # number of time steps into the future
+gcc.out <- out_HARV
+params <- as.matrix(gcc.out$params) # get model parameters
+param.mean <- apply(params, 2, mean)
+predicts <- as.matrix(gcc.out$predict) # get model predictions
+data <- gcc.out$data
+
+ci <- apply(predicts, 2, quantile, c(0.025,0.5,0.975))
+prow <- sample.int(nrow(params), Nmc, replace=TRUE)
+drow = sample.int(nrow(temps_rot), Nmc, replace=TRUE)
+Qmc <- 1/sqrt(params[prow,"tau_add"])  ## convert from precision to standard deviation
+
+IC <- predicts
+pheno_forecast <- forecast(IC = IC[prow, 30],
+                           temp = temps_rot[drow,],
+                           betaTemp = params[prow, "betaTemperature"],
+                           betaX = params[prow, "betaX"],
+                           betaI = params[prow, "betaIntercept"],
+                           Q = Qmc,
+                           n = Nmc)
 
