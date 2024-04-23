@@ -1,23 +1,8 @@
-source("05_historic_forecast.R")
+# Pull in forecast run and historic forecast for plotting
 source("06_forecast.R")
-
-# Get future forecast temperature data
-temps_ensemble <- download_future_met()
-temps.max <- matrix(apply(temps_ensemble,1,max),1, 36)
-
-Nmc = 1000 # number of Monte Carlo draws
-NT = 30 # number of time steps into the future
-gcc.out <- out_HARV
-params <- as.matrix(gcc.out$params) # get model parameters
-param.mean <- apply(params, 2, mean)
-predicts <- as.matrix(gcc.out$predict) # get model predictions
-data <- gcc.out$data
-
-IC <- predicts
 
 # Set up plot function
 s <- 1             ## Focal site for forward simulation
-#Nmc = 1000         ## set number of Monte Carlo draws
 ylim = c(0.3,0.5)  ## set Y range on plot
 N.cols <- c("black","red","green","blue","orange") ## set colors
 trans <- 0.8       ## set transparancy
@@ -32,14 +17,10 @@ plot.run <- function(){
   lines(time1, tail(ci[2,], n=30), col="blue")
 }
 
-ci <- apply(predicts, 2, quantile, c(0.025,0.5,0.975))
-prow <- sample.int(nrow(params), Nmc, replace=TRUE)
-drow = sample.int(nrow(temps_ensemble), Nmc, replace=TRUE)
-Qmc <- 1/sqrt(params[prow,"tau_add"])  ## convert from precision to standard deviation
 
 # Determinstic run
 N.det_pheno <- forecast(IC = mean(IC[,ncol(predicts)]),
-                        temp = temps.max,
+                        temp = temps,
                         betaTemp = param.mean["betaTemperature"],
                         betaX = param.mean["betaX"],
                         betaI = param.mean["betaIntercept"],
@@ -47,8 +28,8 @@ N.det_pheno <- forecast(IC = mean(IC[,ncol(predicts)]),
                         n = 1)
 
 # Initial condition uncertainty
-N.I <- forecast(IC = IC[prow, 30], # , IC = mean(as.numeric(data$OBS))
-                temp = temps.max,#temps[,2],
+N.I <- forecast(IC = IC[prow, 30],
+                temp = temps,
                 betaTemp = param.mean["betaTemperature"],
                 betaX = param.mean["betaX"],
                 betaI = param.mean["betaIntercept"],
@@ -57,8 +38,8 @@ N.I <- forecast(IC = IC[prow, 30], # , IC = mean(as.numeric(data$OBS))
 N.I.ci = apply(N.I,2,quantile,c(0.025,0.5,0.975))
 
 # Parameter uncertainty
-N.IP <- forecast(IC = IC[prow, 30], # , IC = mean(as.numeric(data$OBS))
-                 temp = temps.max,#temps[,2],
+N.IP <- forecast(IC = IC[prow, 30],
+                 temp = temps,
                  betaTemp = params[prow, "betaTemperature"],
                  betaX = params[prow, "betaX"],
                  betaI = params[prow, "betaIntercept"],
@@ -67,8 +48,8 @@ N.IP <- forecast(IC = IC[prow, 30], # , IC = mean(as.numeric(data$OBS))
 N.IP.ci = apply(N.IP,2,quantile,c(0.025,0.5,0.975))
 
 # Driver uncertainty
-N.IPD <- forecast(IC=IC[prow, 30], # , IC = mean(as.numeric(data$OBS))
-                  temp = temps_ensemble[drow,],#temps.max[,drow],
+N.IPD <- forecast(IC = IC[prow, 30],
+                  temp = temps_rot[drow,],
                   betaTemp = params[prow, "betaTemperature"],
                   betaX = params[prow, "betaX"],
                   betaI = params[prow, "betaIntercept"],
@@ -77,8 +58,8 @@ N.IPD <- forecast(IC=IC[prow, 30], # , IC = mean(as.numeric(data$OBS))
 N.IPD.ci = apply(N.IPD,2,quantile,c(0.025,0.5,0.975), na.rm=TRUE)
 
 # Process uncertainty
-N.IPDE <- forecast(IC=IC[prow, 30], # , IC = mean(as.numeric(data$OBS))
-                   temp = temps_ensemble[drow,],
+N.IPDE <- forecast(IC=IC[prow, 30],
+                   temp = temps_rot[drow,],
                    betaTemp = params[prow, "betaTemperature"],
                    betaX = params[prow, "betaX"],
                    betaI = params[prow, "betaIntercept"],
