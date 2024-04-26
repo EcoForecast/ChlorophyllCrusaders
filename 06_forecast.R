@@ -3,7 +3,7 @@ source("05_historic_forecast.R")
 # Function for grabbing future forecast data based on the current date
 
 download_future_met <- function() {
-  weather_stage2 <- neon4cast::noaa_stage2(start_date = as.character(Sys.Date() - lubridate::days(2)))
+  weather_stage2 <- neon4cast::noaa_stage2(start_date = as.character(Sys.Date() - lubridate::days(1)))
   ds1 <- weather_stage2 |> 
     dplyr::filter(site_id == "HARV") |>
     dplyr::collect()
@@ -64,7 +64,7 @@ forecast <- function(IC, temp, betaTemp, betaX, betaI, Q, n){
 # Get future forecast temperature data
 temps_ensemble <- download_future_met()
 temps_rot <- t(temps_ensemble)[,1:30]
-temps <- matrix(apply(temps_rot,2,mean), 1, 30) # it seems more accurate with max though
+temps <- matrix(apply(temps_rot,2,mean), 1, 30) 
 
 Nmc = 1000 # number of Monte Carlo draws
 NT = 30 # number of time steps into the future
@@ -77,7 +77,7 @@ data <- gcc.out$data
 ci <- apply(predicts, 2, quantile, c(0.025,0.5,0.975))
 prow <- sample.int(nrow(params), Nmc, replace=TRUE)
 drow = sample.int(nrow(temps_rot), Nmc, replace=TRUE)
-Qmc <- 1/sqrt(params[prow,"tau_add"])  ## convert from precision to standard deviation
+Qmc <- 1 / sqrt(params[prow,"tau_add"])  ## convert from precision to standard deviation
 
 IC <- predicts
 pheno_forecast <- forecast(IC = IC[prow, 30],
