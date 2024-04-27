@@ -20,7 +20,7 @@ download_historic_data <- function(){
     dplyr::collect()
   
   start_date <- Sys.Date() - lubridate::days(741) # hindcasting 2 years
-  end_date <- Sys.Date() 
+  end_date <- Sys.Date() - 1
   
   # currently not using precip, but it works 
   TMP_historic = ds_historic[ds_historic$variable == c("air_temperature", "precipitation_flux"),]

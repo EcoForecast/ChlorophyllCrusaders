@@ -3,7 +3,7 @@ source("05_historic_forecast.R")
 # Function for grabbing future forecast data based on the current date
 
 download_future_met <- function() {
-  weather_stage2 <- neon4cast::noaa_stage2(start_date = as.character(Sys.Date() - lubridate::days(1)))
+  weather_stage2 <- neon4cast::noaa_stage2(start_date = as.character(Sys.Date() - 1))
   ds1 <- weather_stage2 |> 
     dplyr::filter(site_id == "HARV") |>
     dplyr::collect()
@@ -32,11 +32,11 @@ download_future_met <- function() {
   
   # Define these outside the function to have them accessible to be used in forecast
   # Get dataframe: columns = ensemble number, rows = prediction by time step
-  temps_ensemble <- as.data.frame(pivot_wider(tmps, names_from = parameter, values_from = prediction)[,4:34] - 273.15)
+  #temps_ensemble <- as.data.frame(pivot_wider(tmps, names_from = parameter, values_from = prediction)[,4:34] - 273.15)
   # Get one maximum value for daily prediction
   #temps.max <- matrix(apply(temps_ensemble,1,max),1, 36)
   
-  return(temps_ensemble)
+  return(tmps)
 }
 
 
@@ -62,7 +62,16 @@ forecast <- function(IC, temp, betaTemp, betaX, betaI, Q, n){
 # Making one deterministic run -- for submission?
 
 # Get future forecast temperature data
-temps_ensemble <- download_future_met()
+temps_data <- download_future_met()
+c_temps <- temps_data |> 
+  select(prediction, parameter)
+
+#temps_ensemble <- as.data.frame(pivot_wider(c_temps, 
+#                                            names_from = parameter, 
+#                                            values_from = prediction))#[,1] - 273.15)
+temps_ensemble <- as.data.frame(pivot_wider(temps_data, 
+                                            names_from = parameter, 
+                                            values_from = prediction)[,4:34] - 273.15)
 temps_rot <- t(temps_ensemble)[,1:30]
 temps <- matrix(apply(temps_rot,2,mean), 1, 30) 
 
@@ -80,11 +89,14 @@ drow = sample.int(nrow(temps_rot), Nmc, replace=TRUE)
 Qmc <- 1 / sqrt(params[prow,"tau_add"])  ## convert from precision to standard deviation
 
 IC <- predicts
-pheno_forecast <- forecast(IC = IC[prow, 30],
+pheno_forecast <- forecast(IC[prow, ncol(predicts)],
                            temp = temps_rot[drow,],
                            betaTemp = params[prow, "betaTemperature"],
                            betaX = params[prow, "betaX"],
                            betaI = params[prow, "betaIntercept"],
                            Q = Qmc,
                            n = Nmc)
+
+
+
 

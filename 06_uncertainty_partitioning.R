@@ -4,8 +4,6 @@ source("06_forecast.R")
 # Set up plot function
 s <- 1             ## Focal site for forward simulation
 ylim = c(0.3,0.5)  ## set Y range on plot
-N.cols <- c("black","red","green","blue","orange") ## set colors
-trans <- 0.8       ## set transparancy
 time = 1:(NT*2)    ## total time
 time1 = 1:NT       ## calibration period
 time2 = time1+NT   ## forecast period
@@ -18,7 +16,7 @@ plot.run <- function(){
 }
 
 
-# Determinstic run
+# Deterministic run
 N.det_pheno <- forecast(IC = mean(IC[,ncol(predicts)]),
                         temp = temps,
                         betaTemp = param.mean["betaTemperature"],
@@ -28,7 +26,7 @@ N.det_pheno <- forecast(IC = mean(IC[,ncol(predicts)]),
                         n = 1)
 
 # Initial condition uncertainty
-N.I <- forecast(IC = IC[prow, 30],
+N.I <- forecast(IC = IC[prow, ncol(predicts)],
                 temp = temps,
                 betaTemp = param.mean["betaTemperature"],
                 betaX = param.mean["betaX"],
@@ -38,7 +36,7 @@ N.I <- forecast(IC = IC[prow, 30],
 N.I.ci = apply(N.I,2,quantile,c(0.025,0.5,0.975))
 
 # Parameter uncertainty
-N.IP <- forecast(IC = IC[prow, 30],
+N.IP <- forecast(IC = IC[prow, ncol(predicts)],
                  temp = temps,
                  betaTemp = params[prow, "betaTemperature"],
                  betaX = params[prow, "betaX"],
@@ -48,7 +46,7 @@ N.IP <- forecast(IC = IC[prow, 30],
 N.IP.ci = apply(N.IP,2,quantile,c(0.025,0.5,0.975))
 
 # Driver uncertainty
-N.IPD <- forecast(IC = IC[prow, 30],
+N.IPD <- forecast(IC = IC[prow, ncol(predicts)],
                   temp = temps_rot[drow,],
                   betaTemp = params[prow, "betaTemperature"],
                   betaX = params[prow, "betaX"],
@@ -77,7 +75,7 @@ legend("topleft", legend = c("Initial Condition", "Parameter", "Driver", "Proces
        col = c("lightgreen","pink","orchid","darkgoldenrod1"), lty=1, lwd=5)
 lines(time2,N.det_pheno,lwd=1)
 
-# Uncertainty Analysis
+# Uncertainty Analysis plots
 
 ### calculation of variances
 varI     <- apply(N.I,2,var)
