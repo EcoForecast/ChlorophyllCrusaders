@@ -29,8 +29,6 @@ for(i in 1:length(sites)){
   }
 }
 
-
-
 sub_fcast <- sub_fcast |> relocate(project_id, model_id, datetime, reference_datetime, duration, site_id, family, parameter, variable, prediction)
 year <- year(Sys.Date())
 month <- month(Sys.Date())
@@ -39,16 +37,6 @@ forecast_file <- paste0("phenology-", year, "-", month, "-", day, "-ChlorophyllC
 write.csv(n_fcast, forecast_file)
 neon4cast::forecast_output_validator(forecast_file) # validated!
 
-<<<<<<< Updated upstream
-# Plot the ensembles
-#pheno_means <- n_fcast %>% 
-#  group_by(datetime) |> 
-#  summarize(pred_mean = mean(prediction),.groups = "drop") |> 
-#  select(datetime, pred_mean)
-
-#plot(1:30, pheno_means$pred_mean, type="l")
-#ecoforecastR::ciEnvelope(time1,N.IPDE.ci[1,],N.IPDE.ci[3,],col="darkgoldenrod1")
-=======
 # Plot the ensembles; change site name for different ensembles
 pheno_means <- sub_fcast[sub_fcast$site_id == "RMNP",] %>% 
   group_by(datetime) |> 
@@ -67,8 +55,8 @@ for(s in 2:10) {
   lines(as.Date(pheno_means$datetime), forecasts$HARV[s,], type="b", col=s)
 }
 
->>>>>>> Stashed changes
-# Metadata part- A little unsure what to do here
+
+# Metadata part
 
 team_info <- list(team_name = "ChlorophyllCrusaders",
                   team_list = list(list(individualName = list(givenName = "Alice", 
