@@ -3,7 +3,7 @@ source("05_historic_forecast.R")
 # Function for grabbing future forecast data based on the current date
 
 download_future_met <- function() {
-  weather_stage2 <- neon4cast::noaa_stage2(start_date = as.character(Sys.Date()-1))
+  weather_stage2 <- neon4cast::noaa_stage2(start_date = as.character(Sys.Date()-2))
   ds1 <- weather_stage2 |> 
     dplyr::filter(site_id %in% sites) |>
     dplyr::collect()
