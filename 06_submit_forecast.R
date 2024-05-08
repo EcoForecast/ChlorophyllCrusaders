@@ -38,22 +38,23 @@ write.csv(n_fcast, forecast_file)
 neon4cast::forecast_output_validator(forecast_file) # validated!
 
 # Plot the ensembles; change site name for different ensembles
-pheno_means <- sub_fcast[sub_fcast$site_id == "RMNP",] %>% 
-  group_by(datetime) |> 
-  summarize(pred_mean = mean(prediction),.groups = "drop") |> 
-  select(datetime, pred_mean)
+#pheno_means <- sub_fcast[sub_fcast$site_id == "RMNP",] %>% 
+#  group_by(datetime) |> 
+#  summarize(pred_mean = mean(prediction),.groups = "drop") |> 
+#  select(datetime, pred_mean)
 
-plot(as.Date(pheno_means$datetime), pheno_means$pred_mean, type="l", ylim=c(0.25,0.50),
-     ylab="Mean ensemble GCC", xlab="Time", main="Prediction Ensemble means")
-ecoforecastR::ciEnvelope(pheno_means$datetime,N.IPDE.ci[1,],N.IPDE.ci[3,],col="darkgoldenrod1")
-lines(as.Date(pheno_means$datetime), pheno_means$pred_mean)
+#plot(as.Date(pheno_means$datetime), pheno_means$pred_mean, type="l", ylim=c(0.25,0.50),
+#     ylab="Mean ensemble GCC", xlab="Time", main="Prediction Ensemble means")
+#ecoforecastR::ciEnvelope(pheno_means$datetime,N.IPDE.ci[1,],N.IPDE.ci[3,],col="darkgoldenrod1")
+#lines(as.Date(pheno_means$datetime), pheno_means$pred_mean)
 
-samp <- sample.int(nrow(forecasts$HARV), 10, replace=TRUE)
-plot(as.Date(pheno_means$datetime), forecasts$HARV[1,], type="b", col=1, ylim=c(0.25, 0.50),
-     main="10 random ensemble forecasts", ylab="GCC_90", xlab="Time")
-for(s in 2:10) {
-  lines(as.Date(pheno_means$datetime), forecasts$HARV[s,], type="b", col=s)
-}
+# Plot 10 random ensembles
+#samp <- sample.int(nrow(forecasts$HARV), 10, replace=TRUE)
+#plot(as.Date(pheno_means$datetime), forecasts$HARV[1,], type="b", col=1, ylim=c(0.25, 0.50),
+#     main="10 random ensemble forecasts", ylab="GCC_90", xlab="Time")
+#for(s in 2:10) {
+#  lines(as.Date(pheno_means$datetime), forecasts$HARV[s,], type="b", col=s)
+#}
 
 
 # Metadata part
